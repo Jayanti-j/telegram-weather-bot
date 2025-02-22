@@ -5,17 +5,16 @@ import { firstValueFrom } from 'rxjs';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Weather } from './weather.interface';
-// Define the correct response structure for WeatherAPI.com
+
+// Define the correct response structure for OpenWeatherMap
 interface WeatherResponse {
-  location: {
-    name: string; // City name
+  name: string; // City name
+  main: {
+    temp: number; // Temperature in Celsius
   };
-  current: {
-    temp_c: number; // Temperature in Celsius
-    condition: {
-      text: string; // Weather condition (e.g., "Sunny", "Partly cloudy")
-    };
-  };
+  weather: {
+    description: string; // Weather condition (e.g., "clear sky", "rain")
+  }[];
 }
 
 @Injectable()
@@ -25,13 +24,14 @@ export class WeatherService {
     private configService: ConfigService,
     private httpService: HttpService,
   ) {}
+
   // Method to save weather data
   async saveWeatherData(city: string, temperature: number, condition: string): Promise<Weather> {
     const newWeatherData = new this.weatherModel({
       city,
       temperature,
       condition,
-      });
+    });
     return newWeatherData.save();
   }
 
@@ -41,19 +41,31 @@ export class WeatherService {
   }
 
   async getWeather(city: string): Promise<string> {
-    const apiKey = this.configService.get<string>('WEATHER_API_KEY');
-    const url = `http://api.weatherapi.com/v1/current.json?key=${apiKey}&q=${city}`;
+    const apiKey = this.configService.get<string>('OPENWEATHERMAP_API_KEY');
+    if (!apiKey) {
+      throw new Error('OPENWEATHERMAP_API_KEY is not defined');
+    }
+
+    const url = `https://api.openweathermap.org/data/2.5/weather?q=${city}&appid=${apiKey}&units=metric`;
 
     try {
-      // Fetch weather data from WeatherAPI.com
+      // Fetch weather data from OpenWeatherMap
       const response = await firstValueFrom(
         this.httpService.get<WeatherResponse>(url),
       );
 
+      // Check if the response contains valid data
+      if (!response.data.name || !response.data.main || !response.data.weather?.[0]) {
+        throw new Error('Invalid weather data received from the API');
+      }
+
       // Extract relevant data from the response
-      const location = response.data.location.name;
-      const condition = response.data.current.condition.text;
-      const temperature = response.data.current.temp_c;
+      const location = response.data.name;
+      const temperature = response.data.main.temp;
+      const condition = response.data.weather[0].description;
+
+      // Save weather data to the database
+      await this.saveWeatherData(location, temperature, condition);
 
       // Format the weather message
       return `Weather in ${location}: ${condition}, Temperature: ${temperature}°C`;
@@ -69,7 +81,7 @@ export class WeatherService {
         // Handle Axios errors (e.g., network issues, invalid API key)
         const axiosError = error as { response?: { data?: any } };
         console.error(
-          'Error response from WeatherAPI:',
+          'Error response from OpenWeatherMap:',
           axiosError.response?.data,
         );
       } else {

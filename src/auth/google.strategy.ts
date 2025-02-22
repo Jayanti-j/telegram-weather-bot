@@ -17,11 +17,14 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
   constructor(private configService: ConfigService) {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-call
     super({
-      clientID: configService.get<string>('GOOGLE_CLIENT_ID'),
-      clientSecret: configService.get<string>('GOOGLE_CLIENT_SECRET'),
-      callbackURL: configService.get<string>('CALLBACK_URL'),
-      scope: ['email', 'profile'],
+      clientID: configService.get<string>('GOOGLE_CLIENT_ID')!, // Use the non-null assertion operator
+  clientSecret: configService.get<string>('GOOGLE_CLIENT_SECRET')!, // Use the non-null assertion operator
+  callbackURL: configService.get<string>('GOOGLE_CALLBACK_URL')!, // Use the non-null assertion operator
+  scope: ['email', 'profile'],
+  passReqToCallback: true,
+
     });
+    
   }
 
   validate(
@@ -59,7 +62,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
 
       // Call the done callback with the error
       // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      done(error as Error, null);
+      done(error as Error, false); // Use `false` instead of `null`
     }
   }
 }
